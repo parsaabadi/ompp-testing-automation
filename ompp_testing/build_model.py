@@ -1,0 +1,121 @@
+"""
+Model building functionality for OpenM++ testing.
+"""
+
+import os
+import shutil
+import subprocess
+import glob
+from pathlib import Path
+import requests
+import click
+
+
+def build_model(model_sln, om_root, vs_cmd_path, mode="release", bit=64):
+    """
+    Build OpenM++ models using MSBuild.
+    
+    Takes your model solution file and builds it for each OpenM++ version you give it.
+    Copies all the necessary files to the right places so the models can run.
+    """
+    click.echo(f"🔨 Building model from {model_sln}")
+    
+    if not Path(model_sln).exists():
+        raise FileNotFoundError(f"Can't find the model file: {model_sln}")
+    
+    model_names = []
+    
+    for root in om_root:
+        click.echo(f"  Building for OpenM++ at {root}")
+        
+        if not Path(root).exists():
+            click.echo(f"  ⚠️  OpenM++ directory doesn't exist: {root}")
+            continue
+        
+        try:
+            model_name = _build_single_model(model_sln, root, vs_cmd_path, mode, bit)
+            if model_name:
+                model_names.append(model_name)
+                click.echo(f"  ✅ Built {model_name}")
+            else:
+                click.echo(f"  ❌ Build failed for {root}")
+                
+        except Exception as e:
+            click.echo(f"  ❌ Build error for {root}: {str(e)}")
+    
+    return model_names
+
+
+def _build_single_model(model_sln, om_root, vs_cmd_path, mode, bit):
+    """Build a model for one specific OpenM++ installation."""
+    
+    model_dir = Path(model_sln).parent
+    model_name = Path(model_sln).stem.replace('-ompp', '')
+    
+    click.echo(f"    Setting up environment for {model_name}")
+    
+    env = os.environ.copy()
+    env['OM_ROOT'] = str(Path(om_root).resolve())
+    env['PATH'] = f"{env['OM_ROOT']}/bin;{env['PATH']}"
+    
+    click.echo(f"    Running MSBuild...")
+    
+    try:
+        cmd = [
+            'cmd', '/c', 
+            f'"{vs_cmd_path}" && msbuild "{model_sln}" /p:Configuration={mode} /p:Platform=x{bit}'
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            cwd=model_dir,
+            env=env,
+            capture_output=True,
+            text=True,
+            shell=True
+        )
+        
+        if result.returncode != 0:
+            click.echo(f"    MSBuild failed: {result.stderr}")
+            return None
+        
+        click.echo(f"    MSBuild completed successfully")
+        
+        click.echo(f"    Copying model files...")
+        _copy_model_files(model_dir, om_root, model_name)
+        
+        return model_name
+        
+    except Exception as e:
+        click.echo(f"    Build process failed: {str(e)}")
+        return None
+
+
+def _copy_model_files(model_dir, om_root, model_name):
+    """Copy the built model files to the OpenM++ installation."""
+    
+    om_bin = Path(om_root) / 'bin'
+    om_models = Path(om_root) / 'models'
+    
+    om_models.mkdir(exist_ok=True)
+    
+    model_files = [
+        f"{model_name}.exe",
+        f"{model_name}.dll", 
+        f"{model_name}.pdb",
+        f"{model_name}.xml"
+    ]
+    
+    for file_pattern in model_files:
+        files = list(model_dir.glob(f"**/{file_pattern}"))
+        
+        for file_path in files:
+            dest_path = om_bin / file_path.name
+            
+            try:
+                shutil.copy2(file_path, dest_path)
+                click.echo(f"      Copied {file_path.name}")
+            except Exception as e:
+                click.echo(f"      Failed to copy {file_path.name}: {str(e)}")
+    
+    click.echo(f"    Model {model_name} is ready to run") 
