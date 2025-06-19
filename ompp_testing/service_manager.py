@@ -12,28 +12,53 @@ from pathlib import Path
 import click
 
 
-def start_oms(om_root, model_name="RiskPaths"):
+def start_oms(om_root, model_name=None):
     """
-    Start the OpenM++ service using the same method as start-ompp-ui.bat.
+    Start the OpenM++ service using a model-agnostic approach.
     
-    This starts the service from the model directory with proper parameters
-    and detects the dynamic port the service actually uses.
+    Creates a custom startup script based on the general ompp_ui.bat,
+    similar to how the R version works. This approach works for any model.
     """
-    # Look for the start-ompp-ui.bat file in the model directory
-    model_dir = Path(om_root) / 'models' / model_name
-    start_script = model_dir / 'start-ompp-ui.bat'
+    click.echo(f"🚀 Starting OpenM++ service for {om_root}")
     
-    if not start_script.exists():
-        click.echo(f"  ⚠️  Could not find {start_script}, trying alternative method...")
-        return _start_oms_direct(om_root, model_name)
+    # Look for the general ompp_ui.bat in the bin directory
+    bin_dir = Path(om_root) / 'bin'
+    original_script = bin_dir / 'ompp_ui.bat'
+    custom_script = bin_dir / 'ompp_ui_custom.bat'
     
-    click.echo(f"🚀 Starting OpenM++ service using {start_script}")
+    if not original_script.exists():
+        click.echo(f"  ⚠️  Could not find {original_script}, trying direct method...")
+        return _start_oms_direct(om_root)
     
     try:
-        # Start the batch file and capture output
+        # Read the original script
+        with open(original_script, 'r') as f:
+            script_lines = f.readlines()
+        
+        # Modify the script to set OM_ROOT and remove browser opening
+        modified_lines = []
+        om_root_set = False
+        
+        for line in script_lines:
+            # Add OM_ROOT setting before the oms.exe call
+            if 'oms.exe' in line and not om_root_set:
+                modified_lines.append(f'set "OM_ROOT={om_root}"\n')
+                om_root_set = True
+            
+            # Remove browser opening commands
+            if 'START http://' not in line and 'start http://' not in line:
+                modified_lines.append(line)
+        
+        # Write the custom script
+        with open(custom_script, 'w') as f:
+            f.writelines(modified_lines)
+        
+        click.echo(f"  Starting service using custom script...")
+        
+        # Start the custom script
         process = subprocess.Popen(
-            [str(start_script)],
-            cwd=model_dir,
+            [str(custom_script)],
+            cwd=bin_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -42,48 +67,53 @@ def start_oms(om_root, model_name="RiskPaths"):
         
         click.echo(f"  Service started with PID {process.pid}")
         
-        # Give it a moment to start up and print the port info
-        time.sleep(3)
+        # Give it time to start and detect the port
+        time.sleep(5)
         
-        # Try to find the actual port by looking for running oms processes
         service_url = _detect_service_url()
         
         if service_url:
             click.echo(f"  ✅ OpenM++ service is running at {service_url}")
             return service_url
         else:
-            click.echo("  ⚠️  Service started but could not detect port")
-            return "http://localhost:4040"  # fallback
+            click.echo("  ⚠️  Service started but could not detect port, using default")
+            return "http://localhost:4040"
             
     except Exception as e:
         click.echo(f"  ❌ Failed to start service: {str(e)}")
-        return None
+        # Clean up custom script if it was created
+        if custom_script.exists():
+            try:
+                custom_script.unlink()
+            except:
+                pass
+        return _start_oms_direct(om_root)
 
 
-def _start_oms_direct(om_root, model_name):
+def _start_oms_direct(om_root):
     """
-    Fallback method: start oms.exe directly from model directory.
+    Fallback method: start oms.exe directly with model-agnostic parameters.
     """
-    model_bin_dir = Path(om_root) / 'models' / model_name / 'ompp' / 'bin'
     oms_path = Path(om_root) / 'bin' / 'oms.exe'
+    models_dir = Path(om_root) / 'models' / 'bin'
     
     if not oms_path.exists():
         raise FileNotFoundError(f"Can't find oms.exe at {oms_path}")
     
-    click.echo(f"🚀 Starting OpenM++ service directly from {oms_path}")
+    click.echo(f"  Starting oms.exe directly with models directory: {models_dir}")
     
     try:
-        # Start from the model bin directory with proper parameters
+        # Start with proper model directory parameter
         process = subprocess.Popen(
-            [str(oms_path), '-oms.ModelDir', str(model_bin_dir)],
-            cwd=model_bin_dir,
+            [str(oms_path), '-oms.ModelDir', str(models_dir)],
+            cwd=oms_path.parent,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             creationflags=subprocess.CREATE_NEW_CONSOLE
         )
         
         click.echo(f"  Service started with PID {process.pid}")
-        time.sleep(3)
+        time.sleep(5)
         
         service_url = _detect_service_url()
         if service_url:
@@ -103,8 +133,8 @@ def _detect_service_url():
     
     Tries common ports and returns the first one that responds.
     """
-    # Try common ports
-    ports_to_try = [4040, 4041, 4042] + list(range(50000, 60000, 1000))
+    # Try common ports - start with default, then typical ranges
+    ports_to_try = [4040, 4041, 4042] + list(range(50000, 60000, 500))
     
     for port in ports_to_try:
         try:
@@ -120,9 +150,7 @@ def _detect_service_url():
 
 def stop_oms():
     """
-    Stop any running OpenM++ services.
-    
-    Finds all oms.exe processes and kills them. Useful for cleanup.
+    Stop any running OpenM++ services and clean up custom scripts.
     """
     click.echo("🛑 Stopping OpenM++ services...")
     
@@ -136,6 +164,14 @@ def stop_oms():
                 click.echo(f"  Stopped oms.exe (PID {proc.info['pid']})")
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
+    
+    # Clean up any custom scripts we created
+    try:
+        custom_scripts = Path('.').glob('**/ompp_ui_custom.bat')
+        for script in custom_scripts:
+            script.unlink()
+    except:
+        pass
     
     if killed_count > 0:
         click.echo(f"  ✅ Stopped {killed_count} OpenM++ service(s)")
