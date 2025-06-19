@@ -1,0 +1,12 @@
+{
+  "git_url": "https://github.com/openmpp/main.git",
+  "git_username": null,
+  "git_password": null,
+  "git_commit": "9f4cf26ff8b7c4caf2b26621f02b4310a7380c2e",
+  "model_sln": "riskpaths-ompp.sln",
+  "om_root": [
+    "C:/Users/parsaba/Desktop/1.17.6-patch/openmpp",
+    "C:/Users/parsaba/Desktop/1.17.9/openmpp_win_20250601"
+  ],
+  "vs_cmd_path": "C:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/Tools/VsDevCmd.bat"
+} 
