@@ -103,27 +103,35 @@ def _build_single_model(model_sln, om_root, vs_cmd_path, mode, bit):
 def _copy_model_files(model_dir, om_root, model_name):
     """Copy the built model files to the OpenM++ installation."""
     
-    om_bin = Path(om_root) / 'bin'
-    om_models = Path(om_root) / 'models'
+    # Create the model-specific directory structure that OpenM++ expects
+    model_bin_dir = Path(om_root) / 'models' / model_name / 'ompp' / 'bin'
+    model_bin_dir.mkdir(parents=True, exist_ok=True)
     
-    om_models.mkdir(exist_ok=True)
+    # Also copy to the standard models/bin directory for backward compatibility
+    om_models_bin = Path(om_root) / 'models' / 'bin'
+    om_models_bin.mkdir(parents=True, exist_ok=True)
     
     model_files = [
         f"{model_name}.exe",
         f"{model_name}.dll", 
         f"{model_name}.pdb",
-        f"{model_name}.xml"
+        f"{model_name}.xml",
+        f"{model_name}.sqlite"
     ]
     
     for file_pattern in model_files:
         files = list(model_dir.glob(f"**/{file_pattern}"))
         
         for file_path in files:
-            dest_path = om_bin / file_path.name
+            # Copy to model-specific directory (for start-ompp-ui.bat)
+            dest_path_model = model_bin_dir / file_path.name
+            # Copy to standard models/bin directory (for API service)
+            dest_path_standard = om_models_bin / file_path.name
             
             try:
-                shutil.copy2(file_path, dest_path)
-                click.echo(f"      Copied {file_path.name}")
+                shutil.copy2(file_path, dest_path_model)
+                shutil.copy2(file_path, dest_path_standard)
+                click.echo(f"      Copied {file_path.name} to both locations")
             except Exception as e:
                 click.echo(f"      Failed to copy {file_path.name}: {str(e)}")
     
