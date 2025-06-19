@@ -16,7 +16,7 @@ def get_output_tables(model_name, om_root):
     that are available for your model. This tells you what data you can
     compare between different OpenM++ versions.
     """
-    click.echo(f"📊 Getting output tables for {model_name}")
+    click.echo(f"Getting output tables for {model_name}")
     
     db_path = Path(om_root) / 'models' / f'{model_name}.db'
     
@@ -70,7 +70,7 @@ def get_output_tables(model_name, om_root):
         return tables
         
     except Exception as e:
-        click.echo(f"  ❌ Failed to get tables: {str(e)}")
+        click.echo(f"  ERROR: Failed to get tables: {str(e)}")
         raise
 
 
@@ -105,7 +105,7 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
         return data
         
     except Exception as e:
-        click.echo(f"  ❌ Failed to get table data: {str(e)}")
+        click.echo(f"  ERROR: Failed to get table data: {str(e)}")
         raise
 
 
@@ -141,5 +141,5 @@ def get_model_runs(model_name, om_root):
         return runs
         
     except Exception as e:
-        click.echo(f"  ❌ Failed to get model runs: {str(e)}")
+        click.echo(f"  ERROR: Failed to get model runs: {str(e)}")
         raise 

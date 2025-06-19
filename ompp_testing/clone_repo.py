@@ -18,7 +18,7 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
     If you give it credentials, it'll use them. If you want a specific commit, 
     it'll check that out. If you tell it what model file to look for, it'll find it.
     """
-    click.echo(f"🔄 Cloning repo {git_url}. Hang tight ...")
+    click.echo(f"Cloning repo {git_url}. Hang tight ...")
     
     # Update git_url if login credentials are set
     if git_username and git_password:
@@ -36,12 +36,12 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
     try:
         # Clone repo
         repo = Repo.clone_from(git_url, local_path)
-        click.echo("✅ Repo cloning successful.")
+        click.echo("SUCCESS: Repo cloning successful.")
         
         # Checkout commit hash if set
         if git_commit:
             repo.git.checkout(git_commit, force=True)
-            click.echo(f"✅ Checked out commit {git_commit}")
+            click.echo(f"SUCCESS: Checked out commit {git_commit}")
         
         # Find model solution file
         if model_sln:
@@ -49,7 +49,7 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
             
             if model_files:
                 model_path = str(model_files[0])
-                click.echo(f"✅ Found model solution: {model_path}")
+                click.echo(f"SUCCESS: Found model solution: {model_path}")
                 return model_path
             else:
                 raise FileNotFoundError(f"Can't find {model_sln} anywhere in the repo")
@@ -57,5 +57,5 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
         return str(local_path)
         
     except Exception as e:
-        click.echo(f"❌ Something went wrong: {str(e)}")
+        click.echo(f"ERROR: Something went wrong: {str(e)}")
         raise 

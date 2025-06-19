@@ -10,34 +10,41 @@ from jinja2 import Template
 import click
 
 
-def generate_html_report(summary, output_tables=None, title="OpenM++ Testing Report", 
+def generate_html_report(summary, output_tables, title="OpenM++ Testing Report", 
                         model_name=None, git_commit=None, om_versions=None, 
-                        environment_note=None, output_file=None):
+                        environment_note=None, output_dir=None):
     """
-    Generate a nice HTML report from your testing results.
+    Generate a nice HTML report from the comparison results.
     
-    Takes all the comparison data and turns it into a readable HTML report
-    that you can open in your browser. Shows you exactly what changed between
-    the different OpenM++ versions.
+    Takes all the comparison data and makes a clean, readable HTML report
+    that you can send to others or keep for your records.
     """
-    click.echo("📄 Generating HTML report...")
+    click.echo("Generating HTML report...")
     
-    if output_file is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = f"ompp_testing_report_{timestamp}.html"
-    
-    report_data = _prepare_report_data(
+    # Prepare data for the template
+    data = _prepare_report_data(
         summary, output_tables, title, model_name, 
         git_commit, om_versions, environment_note
     )
     
-    html_content = _render_html_template(report_data)
+    # Render the HTML
+    html_content = _render_html_template(data)
     
+    # Determine output file path
+    if output_dir:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / f"ompp_testing_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    else:
+        output_file = f"ompp_testing_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+    
+    # Save the report
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    click.echo(f"✅ Report saved to: {output_file}")
-    return output_file
+    click.echo(f"SUCCESS: Report saved to: {output_file}")
+    
+    return str(output_file)
 
 
 def _prepare_report_data(summary, output_tables, title, model_name, 

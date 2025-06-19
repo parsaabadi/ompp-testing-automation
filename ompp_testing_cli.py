@@ -82,15 +82,15 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
     required_settings = ['git_url', 'model_sln', 'om_root', 'vs_cmd_path']
     missing_settings = [s for s in required_settings if s not in settings]
     if missing_settings:
-        click.echo(f"❌ Missing required settings: {', '.join(missing_settings)}")
+        click.echo(f"ERROR: Missing required settings: {', '.join(missing_settings)}")
         click.echo("Please provide them via command line options or configuration file.")
         sys.exit(1)
     
     try:
-        click.echo("🚀 Starting OpenM++ testing workflow...")
+        click.echo("Starting OpenM++ testing workflow...")
         
         # Step 1: Clone repository
-        click.echo("📥 Step 1: Cloning repository...")
+        click.echo("Step 1: Cloning repository...")
         model_sln_path = clone_repo(
             git_url=settings['git_url'],
             git_username=settings.get('git_username'),
@@ -100,7 +100,7 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
         )
         
         # Step 2: Build models
-        click.echo("🔨 Step 2: Building models...")
+        click.echo("Step 2: Building models...")
         model_names = build_model(
             model_sln=model_sln_path,
             om_root=settings['om_root'],
@@ -113,66 +113,69 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
             raise RuntimeError("No models were built successfully")
         
         model_name = model_names[0]  # Use first model name
-        click.echo(f"✅ Built model: {model_name}")
+        click.echo(f"SUCCESS: Built model: {model_name}")
         
         # Step 3: Get output tables
-        click.echo("📊 Step 3: Getting output table list...")
+        click.echo("Step 3: Getting output table list...")
         output_tables = get_output_tables(
             model_name=model_name,
             om_root=settings['om_root'][0]
         )
         
         # Step 4: Run models and compare
-        click.echo("⏳ Step 4: Running models and comparing results...")
-        summary = run_models(
+        click.echo("Step 4: Running models and comparing results...")
+        results = run_models(
             om_root=settings['om_root'],
             model_name=model_name,
             cases=cases,
             threads=threads,
             sub_samples=sub_samples,
-            tables=output_tables['name'].tolist(),
+            tables=None,
             tables_per_run=tables_per_run
         )
         
         # Step 5: Generate report
-        click.echo("📄 Step 5: Generating HTML report...")
-        
-        # Prepare output directory
-        if output_dir:
-            output_dir = Path(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output_file = output_dir / f"ompp_testing_report_{model_name}.html"
-        else:
-            output_file = None
-        
-        # Generate versions string
-        om_versions = " vs ".join([f"v{Path(root).name}" for root in settings['om_root']])
+        click.echo("Step 5: Generating HTML report...")
         
         report_path = generate_html_report(
-            summary=summary,
+            summary=results,
             output_tables=output_tables,
-            title=f"Testing OpenM++ with {model_name}",
+            title=f"OpenM++ Testing Report - {model_name}",
             model_name=model_name,
             git_commit=settings.get('git_commit'),
-            om_versions=om_versions,
-            environment_note="All testing done in Windows environment",
-            output_file=str(output_file) if output_file else None
+            om_versions=' vs '.join([Path(p).name for p in settings['om_root']]),
+            environment_note=f"Python testing tool - {len(settings['om_root'])} versions compared",
+            output_dir=output_dir
         )
         
-        click.echo("🎉 Testing workflow completed successfully!")
-        click.echo(f"📄 Report available at: {report_path}")
-        
-        # Display summary statistics
-        if summary and 'summary_table' in summary and not summary['summary_table'].empty:
-            total_tables = len(summary['summary_table'])
-            tables_with_diffs = len(summary['summary_table'][
-                summary['summary_table']['has_differences'] == True
-            ])
+        # Try to save the results for later analysis
+        try:
+            import pickle
+            from datetime import datetime
             
-            click.echo(f"📊 Summary: {total_tables} tables analyzed, {tables_with_diffs} with differences")
+            results_file = f"results_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl"
+            with open(results_file, 'wb') as f:
+                pickle.dump({
+                    'results': results,
+                    'output_tables': output_tables,
+                    'settings': settings
+                }, f)
+        except Exception:
+            pass  # Don't fail if we can't save results
+        
+        click.echo("COMPLETE: Testing workflow completed successfully!")
+        click.echo(f"Report available at: {report_path}")
+        
+        # Show quick summary
+        if results and results.get('summary_table') is not None:
+            summary_df = results['summary_table']
+            if not summary_df.empty:
+                total_tables = len(summary_df)
+                tables_with_diffs = len(summary_df[summary_df['has_differences'] == True])
+                click.echo(f"Summary: {total_tables} tables analyzed, {tables_with_diffs} with differences")
         
     except Exception as e:
-        click.echo(f"❌ Testing workflow failed: {str(e)}")
+        click.echo(f"ERROR: Testing workflow failed: {str(e)}")
         sys.exit(1)
     
     finally:
@@ -199,9 +202,9 @@ def clone(git_url, git_username, git_password, git_commit, model_sln):
             git_commit=git_commit,
             model_sln=model_sln
         )
-        click.echo(f"✅ Model solution file found at: {model_sln_path}")
+        click.echo(f"SUCCESS: Model solution file found at: {model_sln_path}")
     except Exception as e:
-        click.echo(f"❌ Clone failed: {str(e)}")
+        click.echo(f"ERROR: Clone failed: {str(e)}")
         sys.exit(1)
 
 
@@ -209,19 +212,21 @@ def clone(git_url, git_username, git_password, git_commit, model_sln):
 @click.option('--model-sln', required=True, help='Path to model solution file')
 @click.option('--om-root', multiple=True, required=True, help='OpenM++ root directories')
 @click.option('--vs-cmd-path', required=True, help='Path to Visual Studio command prompt')
-def build(model_sln, om_root, vs_cmd_path):
-    """Build OpenM++ models."""
+@click.option('--mode', default='release', help='Build mode (release/debug)')
+@click.option('--bit', default=64, type=int, help='Target architecture (64/32)')
+def build(model_sln, om_root, vs_cmd_path, mode, bit):
+    """Build models for specified OpenM++ versions."""
     try:
         model_names = build_model(
             model_sln=model_sln,
             om_root=list(om_root),
             vs_cmd_path=vs_cmd_path,
-            mode="release",
-            bit=64
+            mode=mode,
+            bit=bit
         )
-        click.echo(f"✅ Built models: {', '.join(model_names)}")
+        click.echo(f"SUCCESS: Built models: {', '.join(model_names)}")
     except Exception as e:
-        click.echo(f"❌ Build failed: {str(e)}")
+        click.echo(f"ERROR: Build failed: {str(e)}")
         sys.exit(1)
 
 
@@ -233,7 +238,7 @@ def tables(model_name, om_root):
     try:
         output_tables = get_output_tables(model_name=model_name, om_root=om_root)
         
-        click.echo(f"📊 Found {len(output_tables)} output tables:")
+        click.echo(f"Found {len(output_tables)} output tables:")
         for idx, row in output_tables.iterrows():
             desc = row.get('description', 'No description')
             if pd.isna(desc) or desc == 'No description available':
@@ -242,33 +247,34 @@ def tables(model_name, om_root):
                 click.echo(f"  {idx + 1:2d}. {row['name']:<30} {desc}")
         
     except Exception as e:
-        click.echo(f"❌ Failed to get tables: {str(e)}")
+        click.echo(f"ERROR: Failed to get tables: {str(e)}")
         sys.exit(1)
 
 
 @cli.command()
-@click.argument('config_file', type=click.Path())
-def create_config(config_file):
+@click.option('--output-file', default='config.json', help='Output configuration file name')
+def create_config(output_file):
     """Create a sample configuration file."""
     
     sample_config = {
         "git_url": "https://github.com/openmpp/main.git",
         "git_username": None,
         "git_password": None,
-        "git_commit": "9f4cf26ff8b7c4caf2b26621f02b4310a7380c2e",
-        "model_sln": "riskpaths-ompp.sln",
+        "git_commit": "latest",
+        "model_sln": "model-ompp.sln",
         "om_root": [
-            "c:/users/username/desktop/ompp/1.17.5",
-            "c:/users/username/desktop/ompp/1.17.9"
+            "c:/path/to/ompp/version1",
+            "c:/path/to/ompp/version2"
         ],
         "vs_cmd_path": "c:/program files/microsoft visual studio/2022/enterprise/common7/tools/vsdevcmd.bat"
     }
     
+    config_file = Path(output_file)
     with open(config_file, 'w') as f:
         json.dump(sample_config, f, indent=2)
     
-    click.echo(f"📄 Created sample configuration file: {config_file}")
-    click.echo("Please edit the file with your specific settings before using.")
+    click.echo(f"Created sample configuration file: {config_file}")
+    click.echo("Edit this file with your specific paths and settings.")
 
 
 if __name__ == '__main__':

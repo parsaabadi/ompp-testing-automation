@@ -31,7 +31,7 @@ class OpenMppAPI:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            click.echo(f"⚠️  Warning: Could not get model runs: {e}")
+            click.echo(f"WARNING: Could not get model runs: {e}")
             return []
     
     def run_model(self, model_name, run_name, options):
@@ -52,7 +52,7 @@ class OpenMppAPI:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            click.echo(f"❌ Model run failed: {e}")
+            click.echo(f"ERROR: Model run failed: {e}")
             raise
     
     def get_run_tables(self, model_name, run_digest):
@@ -64,7 +64,7 @@ class OpenMppAPI:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            click.echo(f"⚠️  Warning: Could not get run tables: {e}")
+            click.echo(f"WARNING: Could not get run tables: {e}")
             return {}
 
 
@@ -77,7 +77,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
     OpenM++ services, runs your model with the parameters you specify, and
     then compares the output tables between different versions.
     """
-    click.echo(f"🚀 Starting model runs for {model_name}")
+    click.echo(f"Starting model runs for {model_name}")
     click.echo(f"  Cases: {cases:,}, Threads: {threads}, Sub-samples: {sub_samples}")
     
     if not tables:
@@ -92,14 +92,14 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
     
     try:
         for i, root in enumerate(om_root):
-            click.echo(f"\n📊 Running on OpenM++ version {Path(root).name}")
+            click.echo(f"\nRunning on OpenM++ version {Path(root).name}")
             
             stop_oms()
             time.sleep(2)
             
             service_url = start_oms(root, model_name)
             if not service_url:
-                click.echo(f"  ❌ Failed to start service for {root}")
+                click.echo(f"  ERROR: Failed to start service for {root}")
                 continue
             
             time.sleep(3)
@@ -111,7 +111,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
             
             all_results.append(version_results)
         
-        click.echo("\n📈 Comparing results between versions...")
+        click.echo("\nComparing results between versions...")
         
         from .compare_model_runs import compare_model_runs
         comparison = compare_model_runs(all_results)
@@ -119,7 +119,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
         return comparison
         
     except Exception as e:
-        click.echo(f"❌ Model run failed: {str(e)}")
+        click.echo(f"ERROR: Model run failed: {str(e)}")
         raise
     
     finally:
@@ -146,14 +146,14 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         response = requests.post(f"{base_url}/run", json=run_params, timeout=300)
         
         if response.status_code != 200:
-            click.echo(f"  ❌ Failed to start model run: {response.text}")
+            click.echo(f"  ERROR: Failed to start model run: {response.text}")
             return None
         
         run_data = response.json()
         run_id = run_data.get('run_id')
         
         if not run_id:
-            click.echo(f"  ❌ No run ID returned")
+            click.echo(f"  ERROR: No run ID returned")
             return None
         
         click.echo(f"  Model run started with ID: {run_id}")
@@ -173,7 +173,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         }
         
     except Exception as e:
-        click.echo(f"  ❌ Error running model: {str(e)}")
+        click.echo(f"  ERROR: Error running model: {str(e)}")
         return None
 
 
@@ -193,10 +193,10 @@ def _wait_for_run_completion(base_url, run_id, max_wait=3600):
                     
                     if status == 'completed':
                         pbar.update(100 - pbar.n)
-                        click.echo("  ✅ Run completed")
+                        click.echo("  SUCCESS: Run completed")
                         return True
                     elif status == 'failed':
-                        click.echo("  ❌ Run failed")
+                        click.echo("  ERROR: Run failed")
                         return False
                     else:
                         progress = status_data.get('progress', 0)
@@ -206,10 +206,10 @@ def _wait_for_run_completion(base_url, run_id, max_wait=3600):
                 time.sleep(5)
                 
             except Exception as e:
-                click.echo(f"  ⚠️  Error checking status: {str(e)}")
+                click.echo(f"  WARNING: Error checking status: {str(e)}")
                 time.sleep(10)
     
-    click.echo("  ⚠️  Run timed out")
+    click.echo("  WARNING: Run timed out")
     return False
 
 
@@ -228,7 +228,7 @@ def _get_all_table_data(om_root, model_name, run_id, tables, tables_per_run):
                 data = get_table_data(model_name, om_root, table_name, run_id)
                 table_data[table_name] = data
             except Exception as e:
-                click.echo(f"    ⚠️  Failed to get {table_name}: {str(e)}")
+                click.echo(f"    WARNING: Failed to get {table_name}: {str(e)}")
                 table_data[table_name] = None
     
     return table_data 

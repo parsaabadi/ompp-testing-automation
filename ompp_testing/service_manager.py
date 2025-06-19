@@ -19,7 +19,7 @@ def start_oms(om_root, model_name=None):
     Creates a custom startup script based on the general ompp_ui.bat,
     similar to how the R version works. This approach works for any model.
     """
-    click.echo(f"🚀 Starting OpenM++ service for {om_root}")
+    click.echo(f"Starting OpenM++ service for {om_root}")
     
     # Look for the general ompp_ui.bat in the bin directory
     bin_dir = Path(om_root) / 'bin'
@@ -27,7 +27,7 @@ def start_oms(om_root, model_name=None):
     custom_script = bin_dir / 'ompp_ui_custom.bat'
     
     if not original_script.exists():
-        click.echo(f"  ⚠️  Could not find {original_script}, trying direct method...")
+        click.echo(f"  WARNING: Could not find {original_script}, trying direct method...")
         return _start_oms_direct(om_root)
     
     try:
@@ -73,14 +73,14 @@ def start_oms(om_root, model_name=None):
         service_url = _detect_service_url()
         
         if service_url:
-            click.echo(f"  ✅ OpenM++ service is running at {service_url}")
+            click.echo(f"  SUCCESS: OpenM++ service is running at {service_url}")
             return service_url
         else:
-            click.echo("  ⚠️  Service started but could not detect port, using default")
+            click.echo("  WARNING: Service started but could not detect port, using default")
             return "http://localhost:4040"
             
     except Exception as e:
-        click.echo(f"  ❌ Failed to start service: {str(e)}")
+        click.echo(f"  ERROR: Failed to start service: {str(e)}")
         # Clean up custom script if it was created
         if custom_script.exists():
             try:
@@ -117,13 +117,13 @@ def _start_oms_direct(om_root):
         
         service_url = _detect_service_url()
         if service_url:
-            click.echo(f"  ✅ OpenM++ service is running at {service_url}")
+            click.echo(f"  SUCCESS: OpenM++ service is running at {service_url}")
             return service_url
         else:
             return "http://localhost:4040"  # fallback
             
     except Exception as e:
-        click.echo(f"  ❌ Failed to start service: {str(e)}")
+        click.echo(f"  ERROR: Failed to start service: {str(e)}")
         return None
 
 
@@ -152,7 +152,7 @@ def stop_oms():
     """
     Stop any running OpenM++ services and clean up custom scripts.
     """
-    click.echo("🛑 Stopping OpenM++ services...")
+    click.echo("Stopping OpenM++ services...")
     
     killed_count = 0
     
@@ -174,9 +174,9 @@ def stop_oms():
         pass
     
     if killed_count > 0:
-        click.echo(f"  ✅ Stopped {killed_count} OpenM++ service(s)")
+        click.echo(f"  SUCCESS: Stopped {killed_count} OpenM++ service(s)")
     else:
-        click.echo("  ℹ️  No OpenM++ services were running")
+        click.echo("  INFO: No OpenM++ services were running")
 
 
 def _check_oms_running(base_url="http://localhost:4040"):
