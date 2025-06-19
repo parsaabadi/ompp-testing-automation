@@ -61,13 +61,18 @@ def _build_single_model(model_sln, om_root, vs_cmd_path, mode, bit):
     click.echo(f"    Running MSBuild...")
     
     try:
-        cmd = [
-            'cmd', '/c', 
-            f'"{vs_cmd_path}" && msbuild "{model_sln}" /p:Configuration={mode} /p:Platform=x{bit}'
-        ]
+        # Handle Visual Studio command path properly
+        if vs_cmd_path.endswith('.bat'):
+            # If it's VsDevCmd.bat, set up environment first
+            vs_setup_cmd = f'call "{vs_cmd_path}"'
+            msbuild_cmd = f'msbuild "{model_sln}" /p:Configuration={mode} /p:Platform=x{bit}'
+            full_cmd = f'{vs_setup_cmd} && {msbuild_cmd}'
+        else:
+            # If it's direct MSBuild.exe path
+            full_cmd = f'"{vs_cmd_path}" "{model_sln}" /p:Configuration={mode} /p:Platform=x{bit}'
         
         result = subprocess.run(
-            cmd,
+            full_cmd,
             cwd=model_dir,
             env=env,
             capture_output=True,
