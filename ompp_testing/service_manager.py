@@ -37,14 +37,18 @@ def start_oms(om_root):
         click.echo(f"  Service started with PID {process.pid}")
         
         click.echo("  Waiting for service to be ready...")
-        time.sleep(3)
         
-        if _check_oms_running():
-            click.echo("  ✅ OpenM++ service is running")
-            return True
-        else:
-            click.echo("  ⚠️  Service might not be ready yet")
-            return False
+        # Try multiple times with increasing delays
+        for attempt in range(10):  # Try for up to 30 seconds
+            time.sleep(3)
+            if _check_oms_running():
+                click.echo("  ✅ OpenM++ service is running")
+                return True
+            else:
+                click.echo(f"  ⏳ Service not ready yet (attempt {attempt + 1}/10)...")
+        
+        click.echo("  ⚠️  Service did not become ready within 30 seconds")
+        return False
             
     except Exception as e:
         click.echo(f"  ❌ Failed to start service: {str(e)}")

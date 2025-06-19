@@ -81,7 +81,11 @@ def _build_single_model(model_sln, om_root, vs_cmd_path, mode, bit):
         )
         
         if result.returncode != 0:
-            click.echo(f"    MSBuild failed: {result.stderr}")
+            click.echo(f"    MSBuild failed with return code {result.returncode}")
+            if result.stdout:
+                click.echo(f"    MSBuild stdout: {result.stdout}")
+            if result.stderr:
+                click.echo(f"    MSBuild stderr: {result.stderr}")
             return None
         
         click.echo(f"    MSBuild completed successfully")
