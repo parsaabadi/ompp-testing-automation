@@ -234,7 +234,7 @@ def tables(model_name, om_root):
         
         click.echo(f"📊 Found {len(output_tables)} output tables:")
         for idx, row in output_tables.iterrows():
-            click.echo(f"  {idx + 1:2d}. {row['name']:<30} {row['description']}")
+            click.echo(f"  {idx + 1:2d}. {row['name']}")
         
     except Exception as e:
         click.echo(f"❌ Failed to get tables: {str(e)}")

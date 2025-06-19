@@ -29,11 +29,9 @@ def get_output_tables(model_name, om_root):
         query = """
         SELECT 
             t.table_name as name,
-            t.table_descr as description,
             t.table_hid as hid,
             t.table_digest as digest
         FROM table_dic t
-        WHERE t.table_name LIKE '%_out%'
         ORDER BY t.table_name
         """
         
