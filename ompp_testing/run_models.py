@@ -97,7 +97,8 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
             stop_oms()
             time.sleep(2)
             
-            if not start_oms(root):
+            service_url = start_oms(root, model_name)
+            if not service_url:
                 click.echo(f"  ❌ Failed to start service for {root}")
                 continue
             
@@ -105,7 +106,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
             
             version_results = _run_single_version(
                 root, model_name, cases, threads, sub_samples, 
-                tables, tables_per_run, i
+                tables, tables_per_run, i, service_url
             )
             
             all_results.append(version_results)
@@ -126,12 +127,12 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
 
 
 def _run_single_version(om_root, model_name, cases, threads, sub_samples, 
-                       tables, tables_per_run, version_index):
+                       tables, tables_per_run, version_index, service_url):
     """Run the model on one specific OpenM++ version."""
     
     click.echo(f"  Starting model run...")
     
-    base_url = "http://localhost:4040/api"
+    base_url = f"{service_url}/api"
     
     try:
         run_params = {
