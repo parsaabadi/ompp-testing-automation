@@ -36,18 +36,37 @@ def start_oms(om_root, model_name=None):
             script_lines = f.readlines()
         
         # Modify the script to set OM_ROOT and remove browser opening
+        # Follow the R version approach: insert OM_ROOT setting before the echo line
         modified_lines = []
         om_root_set = False
         
         for line in script_lines:
-            # Add OM_ROOT setting before the oms.exe call
-            if 'oms.exe' in line and not om_root_set:
+            # Find the line that echoes OM_ROOT and insert our setting before it
+            if 'echo "OM_ROOT:" %OM_ROOT%' in line and not om_root_set:
+                # Insert OM_ROOT setting before the echo line
                 modified_lines.append(f'set "OM_ROOT={om_root}"\n')
                 om_root_set = True
-            
-            # Remove browser opening commands
-            if 'START http://' not in line and 'start http://' not in line:
                 modified_lines.append(line)
+            elif 'echo OM_ROOT: %OM_ROOT%' in line and not om_root_set:
+                # Handle case without quotes
+                modified_lines.append(f'set "OM_ROOT={om_root}"\n')
+                om_root_set = True
+                modified_lines.append(line)
+            elif 'START http://' not in line and 'start http://' not in line:
+                # Remove browser opening commands but keep everything else
+                modified_lines.append(line)
+        
+        # If we didn't find the echo line, fallback to old method
+        if not om_root_set:
+            click.echo(f"  WARNING: Could not find OM_ROOT echo line, using fallback...")
+            modified_lines = []
+            for line in script_lines:
+                if 'oms.exe' in line and not om_root_set:
+                    modified_lines.append(f'set "OM_ROOT={om_root}"\n')
+                    om_root_set = True
+                
+                if 'START http://' not in line and 'start http://' not in line:
+                    modified_lines.append(line)
         
         # Write the custom script
         with open(custom_script, 'w') as f:
