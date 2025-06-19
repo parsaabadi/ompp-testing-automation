@@ -26,16 +26,43 @@ def get_output_tables(model_name, om_root):
     try:
         conn = sqlite3.connect(str(db_path))
         
-        query = """
+        # First get the basic table info from table_dic
+        table_dic_query = """
         SELECT 
-            t.table_name as name,
-            t.table_hid as hid,
-            t.table_digest as digest
-        FROM table_dic t
-        ORDER BY t.table_name
+            table_hid,
+            table_name as name,
+            table_digest as digest
+        FROM table_dic
+        ORDER BY table_name
         """
         
-        tables = pd.read_sql_query(query, conn)
+        tables_df = pd.read_sql_query(table_dic_query, conn)
+        
+        # Try to get descriptions from table_dic_txt (like the R version does)
+        try:
+            desc_query = """
+            SELECT 
+                table_hid,
+                descr as description
+            FROM table_dic_txt
+            WHERE lang_id = 0
+            """
+            
+            desc_df = pd.read_sql_query(desc_query, conn)
+            
+            # Join tables with descriptions
+            tables = pd.merge(tables_df, desc_df, on='table_hid', how='left')
+            
+        except Exception as desc_e:
+            # If table_dic_txt doesn't exist or query fails, just use basic info
+            click.echo(f"  Note: Could not get table descriptions: {str(desc_e)}")
+            tables = tables_df
+            tables['description'] = 'No description available'
+        
+        # Clean up - remove table_hid since we don't need it in the final result
+        if 'table_hid' in tables.columns:
+            tables = tables.drop('table_hid', axis=1)
+        
         conn.close()
         
         click.echo(f"  Found {len(tables)} output tables")

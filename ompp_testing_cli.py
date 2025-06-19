@@ -10,6 +10,7 @@ import sys
 import json
 from pathlib import Path
 import click
+import pandas as pd
 
 # Add the ompp_testing package to the path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -234,7 +235,11 @@ def tables(model_name, om_root):
         
         click.echo(f"📊 Found {len(output_tables)} output tables:")
         for idx, row in output_tables.iterrows():
-            click.echo(f"  {idx + 1:2d}. {row['name']}")
+            desc = row.get('description', 'No description')
+            if pd.isna(desc) or desc == 'No description available':
+                click.echo(f"  {idx + 1:2d}. {row['name']}")
+            else:
+                click.echo(f"  {idx + 1:2d}. {row['name']:<30} {desc}")
         
     except Exception as e:
         click.echo(f"❌ Failed to get tables: {str(e)}")
