@@ -46,9 +46,10 @@ def cli():
 @click.option('--threads', default=8, type=int, help='Number of threads')
 @click.option('--sub-samples', default=8, type=int, help='Number of sub-samples')
 @click.option('--tables-per-run', default=25, type=int, help='Tables per run batch')
+@click.option('--max-run-time', default=86400, type=int, help='Maximum time to wait for each model run in seconds (default: 86400 = 24 hours)')
 @click.option('--output-dir', help='Output directory for reports')
 def run_test(config, git_url, git_username, git_password, git_commit, model_sln, 
-             om_root, vs_cmd_path, cases, threads, sub_samples, tables_per_run, output_dir):
+             om_root, vs_cmd_path, cases, threads, sub_samples, tables_per_run, max_run_time, output_dir):
     """
     Run the complete testing workflow.
     
@@ -131,7 +132,8 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
             threads=threads,
             sub_samples=sub_samples,
             tables=None,
-            tables_per_run=tables_per_run
+            tables_per_run=tables_per_run,
+            max_run_time=max_run_time
         )
         
         # Generate report

@@ -48,7 +48,7 @@ class OpenMppAPI:
             response = requests.post(
                 f"{self.base_url}/api/run",
                 json=payload,
-                timeout=3600  # 1 hour timeout
+                timeout=None  # No timeout - allow for long model runs
             )
             response.raise_for_status()
             return response.json()
@@ -70,16 +70,25 @@ class OpenMppAPI:
 
 
 def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8, 
-               tables=None, tables_per_run=25):
+               tables=None, tables_per_run=25, max_run_time=86400):
     """
     Run models on different OpenM++ versions and compare the results.
     
     This is the main function that does the heavy lifting. It starts up the
     OpenM++ services, runs your model with the parameters you specify, and
     then compares the output tables between different versions.
+    
+    The function is designed to handle long-running models that may take hours
+    or even days to complete. By default, it will wait up to 24 hours for each
+    model run to finish, but this can be customized via the max_run_time parameter.
+    
+    Args:
+        max_run_time: Maximum time to wait for each model run in seconds (default: 86400 = 24 hours)
+                     Set to None for unlimited waiting time (not recommended)
     """
     click.echo(f"Starting model runs for {model_name}")
     click.echo(f"  Cases: {cases:,}, Threads: {threads}, Sub-samples: {sub_samples}")
+    click.echo(f"  Maximum run time per version: {max_run_time//3600:.1f} hours")
     
     if not tables:
         click.echo("  No tables specified, will get all output tables")
@@ -107,7 +116,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
             
             version_results = _run_single_version(
                 root, model_name, cases, threads, sub_samples, 
-                tables, tables_per_run, i, service_url
+                tables, tables_per_run, i, service_url, max_run_time
             )
             
             all_results.append(version_results)
@@ -217,7 +226,7 @@ def _fix_model_detection(om_root, model_name):
 
 
 def _run_single_version(om_root, model_name, cases, threads, sub_samples, 
-                       tables, tables_per_run, version_index, service_url):
+                       tables, tables_per_run, version_index, service_url, max_run_time):
     click.echo(f"  Starting model run...")
     
     try:
@@ -284,7 +293,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         response = requests.post(
             f"{service_url}/api/run", 
             json=run_request, 
-            timeout=30
+            timeout=None  # No timeout - allow for long model runs
         )
         
         click.echo(f"  Response status: {response.status_code}")
@@ -339,7 +348,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             click.echo(f"  Model digest: {model_digest}")
         
         click.echo(f"  Waiting for run completion...")
-        completed = _wait_for_run_completion(service_url, actual_model_name, run_digest)
+        completed = _wait_for_run_completion(service_url, actual_model_name, run_digest, max_run_time)
         
         if not completed:
             click.echo(f"  Run status check timed out, but run may have completed")
@@ -366,11 +375,15 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         raise
 
 
-def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
-    """Wait for a model run to finish using OpenM++ API."""
+def _wait_for_run_completion(service_url, model_name, run_id, max_wait):
+    """Wait for a model run to finish using OpenM++ API.
+    
+    Args:
+        max_wait: Maximum time to wait in seconds (default: 86400 = 24 hours)
+    """
     
     start_time = time.time()
-    check_interval = 5
+    check_interval = 30  # Start with 30 seconds between checks
     
     endpoints_to_try = [
         f"{service_url}/api/model/{model_name}/run/{run_id}/status",
@@ -379,7 +392,7 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
         f"{service_url}/api/run-list"
     ]
     
-    click.echo(f"    Checking run status every {check_interval}s (max {max_wait}s)...")
+    click.echo(f"    Checking run status every {check_interval}s (max {max_wait//3600:.1f} hours)...")
     
     while time.time() - start_time < max_wait:
         try:
@@ -415,6 +428,15 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
                 except requests.exceptions.RequestException:
                     continue
             
+            # Progressive check interval - start at 30s, increase to 5 minutes for long runs
+            elapsed = time.time() - start_time
+            if elapsed > 3600:  # After 1 hour, check every 5 minutes
+                check_interval = 300
+            elif elapsed > 600:  # After 10 minutes, check every 2 minutes
+                check_interval = 120
+            else:  # First 10 minutes, check every 30 seconds
+                check_interval = 30
+                
             time.sleep(check_interval)
             
         except Exception as e:
@@ -422,8 +444,9 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
             time.sleep(check_interval)
     
     elapsed = time.time() - start_time
-    click.echo(f"    Run status check timed out after {elapsed:.1f}s")
-    click.echo(f"    Run may still be processing in background")
+    click.echo(f"    Run status check timed out after {elapsed//3600:.0f}h {(elapsed%3600)//60:.0f}m")
+    click.echo(f"    Maximum wait time ({max_wait//3600:.1f} hours) reached")
+    click.echo(f"    Run may still be processing in background - check manually if needed")
     return True
 
 

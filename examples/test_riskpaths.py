@@ -76,7 +76,8 @@ def test_riskpaths():
             threads=4,
             sub_samples=4,
             tables=None,
-            tables_per_run=10
+            tables_per_run=10,
+            max_run_time=7200  # 2 hours for example runs
         )
         
         # Generate report
