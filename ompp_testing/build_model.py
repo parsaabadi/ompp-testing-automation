@@ -86,6 +86,13 @@ def _build_single_model(model_sln, om_root, vs_cmd_path, mode, bit):
                 click.echo(f"    MSBuild stdout: {result.stdout}")
             if result.stderr:
                 click.echo(f"    MSBuild stderr: {result.stderr}")
+            
+            # Check for specific error patterns
+            error_output = (result.stdout or "") + (result.stderr or "")
+            if "error C" in error_output or "Error(s)" in error_output:
+                click.echo(f"    Compilation errors detected - build failed")
+                raise RuntimeError(f"Model compilation failed with errors")
+            
             return None
         
         click.echo(f"    MSBuild completed successfully")
