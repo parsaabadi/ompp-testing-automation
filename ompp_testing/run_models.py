@@ -127,11 +127,98 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
         stop_oms()
 
 
+def _debug_model_files(om_root, model_name):
+    """Debug function to check what model files exist and their properties."""
+    models_bin = Path(om_root) / 'models' / 'bin'
+    model_specific_bin = Path(om_root) / 'models' / model_name / 'ompp' / 'bin'
+    
+    click.echo(f"    Checking models directory: {models_bin}")
+    if models_bin.exists():
+        files = list(models_bin.iterdir())
+        click.echo(f"    Found {len(files)} files in models/bin:")
+        for f in files:
+            if f.suffix in ['.exe', '.sqlite']:
+                click.echo(f"      {f.name} ({f.stat().st_size} bytes)")
+    else:
+        click.echo(f"    Models directory does not exist: {models_bin}")
+    
+    click.echo(f"    Checking model-specific directory: {model_specific_bin}")
+    if model_specific_bin.exists():
+        files = list(model_specific_bin.iterdir())
+        click.echo(f"    Found {len(files)} files in model-specific bin:")
+        for f in files:
+            if f.suffix in ['.exe', '.sqlite']:
+                click.echo(f"      {f.name} ({f.stat().st_size} bytes)")
+    else:
+        click.echo(f"    Model-specific directory does not exist: {model_specific_bin}")
+
+
+def _fix_model_detection(om_root, model_name):
+    """Try to fix model detection by ensuring database files are in the right place."""
+    models_bin = Path(om_root) / 'models' / 'bin'
+    model_specific_bin = Path(om_root) / 'models' / model_name / 'ompp' / 'bin'
+    
+    sqlite_file = f"{model_name}.sqlite"
+    exe_file = f"{model_name}.exe"
+    
+    target_sqlite = models_bin / sqlite_file
+    target_exe = models_bin / exe_file
+    
+    source_locations = [
+        model_specific_bin / sqlite_file,
+        model_specific_bin / exe_file,
+        Path(om_root) / 'bin' / sqlite_file,
+        Path(om_root) / 'bin' / exe_file
+    ]
+    
+    click.echo(f"    Ensuring model files are in service directory...")
+    
+    files_copied = False
+    
+    for source_file in source_locations:
+        if source_file.exists():
+            if source_file.suffix == '.sqlite':
+                if not target_sqlite.exists() or target_sqlite.stat().st_size == 0:
+                    try:
+                        shutil.copy2(source_file, target_sqlite)
+                        click.echo(f"      Copied {source_file} -> {target_sqlite}")
+                        files_copied = True
+                    except Exception as e:
+                        click.echo(f"      Failed to copy {source_file}: {e}")
+            
+            elif source_file.suffix == '.exe':
+                if not target_exe.exists():
+                    try:
+                        shutil.copy2(source_file, target_exe)
+                        click.echo(f"      Copied {source_file} -> {target_exe}")
+                        files_copied = True
+                    except Exception as e:
+                        click.echo(f"      Failed to copy {source_file}: {e}")
+    
+    if files_copied:
+        click.echo(f"    Files copied, waiting for service to refresh...")
+        time.sleep(3)
+        return model_name
+    
+    exe_files = list(models_bin.glob("*.exe"))
+    if exe_files:
+        detected_name = exe_files[0].stem
+        click.echo(f"    Found executable: {exe_files[0].name}, using model name: {detected_name}")
+        return detected_name
+    
+    return None
+
+
 def _run_single_version(om_root, model_name, cases, threads, sub_samples, 
                        tables, tables_per_run, version_index, service_url):
     click.echo(f"  Starting model run...")
     
     try:
+        model_names = []  # Initialize to avoid reference errors
+        
+        click.echo(f"  Debugging model detection...")
+        _debug_model_files(om_root, model_name)
+        
         click.echo(f"  Checking available models...")
         response = requests.get(f"{service_url}/api/model-list", timeout=10)
         
@@ -141,14 +228,24 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
                 model_names = [m.get('Name', 'Unknown') for m in models]
                 click.echo(f"  Service sees {len(model_names)} models: {model_names}")
                 
-                model_found = any(name.lower() == model_name.lower() for name in model_names)
-                if not model_found:
-                    click.echo(f"  ERROR: Model '{model_name}' not found in service")
-                    click.echo(f"  Available models: {model_names}")
-                    return None
-                
-                actual_model_name = next((name for name in model_names if name.lower() == model_name.lower()), model_name)
-                click.echo(f"  Using model name: '{actual_model_name}'")
+                if all(name == 'Unknown' for name in model_names):
+                    click.echo(f"  All models show as 'Unknown' - trying to fix model detection...")
+                    fixed_name = _fix_model_detection(om_root, model_name)
+                    if fixed_name:
+                        actual_model_name = fixed_name
+                        click.echo(f"  Using fixed model name: '{actual_model_name}'")
+                    else:
+                        click.echo(f"  Could not fix model detection, using original name: '{model_name}'")
+                        actual_model_name = model_name
+                else:
+                    model_found = any(name.lower() == model_name.lower() for name in model_names)
+                    if not model_found:
+                        click.echo(f"  ERROR: Model '{model_name}' not found in service")
+                        click.echo(f"  Available models: {model_names}")
+                        return None
+                    
+                    actual_model_name = next((name for name in model_names if name.lower() == model_name.lower()), model_name)
+                    click.echo(f"  Using model name: '{actual_model_name}'")
             else:
                 click.echo(f"  WARNING: Service returned empty model list")
                 actual_model_name = model_name
@@ -169,6 +266,10 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             },
             "Tables": tables[:10] if tables else []
         }
+        
+        if all(name == 'Unknown' for name in model_names) and len(model_names) == 1:
+            click.echo(f"  Trying with direct model name since service shows 'Unknown'...")
+            run_request["ModelName"] = model_name
         
         click.echo(f"  Sending run request to: {service_url}/api/run")
         click.echo(f"  Request payload: {json.dumps(run_request, indent=2)}")
