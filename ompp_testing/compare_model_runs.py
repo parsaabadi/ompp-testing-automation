@@ -17,7 +17,7 @@ def compare_model_runs(results):
     find out if upgrading OpenM++ changed your results.
     """
     if len(results) < 2:
-        click.echo("WARNING: Need at least 2 versions to compare")
+        click.echo("Need at least 2 versions to compare")
         return None
     
     click.echo("Comparing output tables between versions...")
@@ -40,7 +40,7 @@ def compare_model_runs(results):
     
     summary = _create_summary(comparison_results, results)
     
-    click.echo(f"SUCCESS: Comparison complete. Found differences in {len([r for r in comparison_results if r['has_differences']])} tables")
+    click.echo(f"Comparison complete. Found differences in {len([r for r in comparison_results if r['has_differences']])} tables")
     
     return summary
 

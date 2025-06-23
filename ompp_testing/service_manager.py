@@ -27,7 +27,7 @@ def start_oms(om_root, model_name=None):
     custom_script = bin_dir / 'ompp_ui_custom.bat'
     
     if not original_script.exists():
-        click.echo(f"  WARNING: Could not find {original_script}, trying direct method...")
+        click.echo(f"  Could not find {original_script}, trying direct method...")
         return _start_oms_direct(om_root)
     
     try:
@@ -58,7 +58,7 @@ def start_oms(om_root, model_name=None):
         
         # If we didn't find the echo line, fallback to old method
         if not om_root_set:
-            click.echo(f"  WARNING: Could not find OM_ROOT echo line, using fallback...")
+            click.echo(f"  Could not find OM_ROOT echo line, using fallback...")
             modified_lines = []
             for line in script_lines:
                 if 'oms.exe' in line and not om_root_set:

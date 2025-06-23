@@ -29,19 +29,19 @@ def build_model(model_sln, om_root, vs_cmd_path, mode="release", bit=64):
         click.echo(f"  Building for OpenM++ at {root}")
         
         if not Path(root).exists():
-            click.echo(f"  WARNING: OpenM++ directory doesn't exist: {root}")
+            click.echo(f"  OpenM++ directory doesn't exist: {root}")
             continue
         
         try:
             model_name = _build_single_model(model_sln, root, vs_cmd_path, mode, bit)
             if model_name:
                 model_names.append(model_name)
-                click.echo(f"  SUCCESS: Built {model_name}")
+                click.echo(f"  Built {model_name}")
             else:
-                click.echo(f"  ERROR: Build failed for {root}")
+                click.echo(f"  Build failed for {root}")
                 
         except Exception as e:
-            click.echo(f"  ERROR: Build error for {root}: {str(e)}")
+            click.echo(f"  Build error for {root}: {str(e)}")
     
     return model_names
 

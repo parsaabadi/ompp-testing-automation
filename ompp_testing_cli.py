@@ -82,15 +82,15 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
     required_settings = ['git_url', 'model_sln', 'om_root', 'vs_cmd_path']
     missing_settings = [s for s in required_settings if s not in settings]
     if missing_settings:
-        click.echo(f"ERROR: Missing required settings: {', '.join(missing_settings)}")
+        click.echo(f"Missing required settings: {', '.join(missing_settings)}")
         click.echo("Please provide them via command line options or configuration file.")
         sys.exit(1)
     
     try:
         click.echo("Starting OpenM++ testing workflow...")
         
-        # Step 1: Clone repository
-        click.echo("Step 1: Cloning repository...")
+        # Clone repository
+        click.echo("Cloning repository...")
         model_sln_path = clone_repo(
             git_url=settings['git_url'],
             git_username=settings.get('git_username'),
@@ -99,8 +99,8 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
             model_sln=settings['model_sln']
         )
         
-        # Step 2: Build models
-        click.echo("Step 2: Building models...")
+        # Build models
+        click.echo("Building models...")
         model_names = build_model(
             model_sln=model_sln_path,
             om_root=settings['om_root'],
@@ -113,17 +113,17 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
             raise RuntimeError("No models were built successfully")
         
         model_name = model_names[0]  # Use first model name
-        click.echo(f"SUCCESS: Built model: {model_name}")
+        click.echo(f"Model built successfully: {model_name}")
         
-        # Step 3: Get output tables
-        click.echo("Step 3: Getting output table list...")
+        # Get output tables
+        click.echo("Getting output table list...")
         output_tables = get_output_tables(
             model_name=model_name,
             om_root=settings['om_root'][0]
         )
         
-        # Step 4: Run models and compare
-        click.echo("Step 4: Running models and comparing results...")
+        # Run models and compare
+        click.echo("Running models and comparing results...")
         results = run_models(
             om_root=settings['om_root'],
             model_name=model_name,
@@ -134,8 +134,8 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
             tables_per_run=tables_per_run
         )
         
-        # Step 5: Generate report
-        click.echo("Step 5: Generating HTML report...")
+        # Generate report
+        click.echo("Generating HTML report...")
         
         report_path = generate_html_report(
             summary=results,
@@ -163,7 +163,7 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
         except Exception:
             pass  # Don't fail if we can't save results
         
-        click.echo("COMPLETE: Testing workflow completed successfully!")
+        click.echo("Testing workflow completed successfully!")
         click.echo(f"Report available at: {report_path}")
         
         # Show quick summary
@@ -175,7 +175,7 @@ def run_test(config, git_url, git_username, git_password, git_commit, model_sln,
                 click.echo(f"Summary: {total_tables} tables analyzed, {tables_with_diffs} with differences")
         
     except Exception as e:
-        click.echo(f"ERROR: Testing workflow failed: {str(e)}")
+        click.echo(f"Testing workflow failed: {str(e)}")
         sys.exit(1)
     
     finally:
@@ -202,9 +202,9 @@ def clone(git_url, git_username, git_password, git_commit, model_sln):
             git_commit=git_commit,
             model_sln=model_sln
         )
-        click.echo(f"SUCCESS: Model solution file found at: {model_sln_path}")
+        click.echo(f"Model solution file found at: {model_sln_path}")
     except Exception as e:
-        click.echo(f"ERROR: Clone failed: {str(e)}")
+        click.echo(f"Clone failed: {str(e)}")
         sys.exit(1)
 
 
@@ -224,9 +224,9 @@ def build(model_sln, om_root, vs_cmd_path, mode, bit):
             mode=mode,
             bit=bit
         )
-        click.echo(f"SUCCESS: Built models: {', '.join(model_names)}")
+        click.echo(f"Built models: {', '.join(model_names)}")
     except Exception as e:
-        click.echo(f"ERROR: Build failed: {str(e)}")
+        click.echo(f"Build failed: {str(e)}")
         sys.exit(1)
 
 
@@ -247,7 +247,7 @@ def tables(model_name, om_root):
                 click.echo(f"  {idx + 1:2d}. {row['name']:<30} {desc}")
         
     except Exception as e:
-        click.echo(f"ERROR: Failed to get tables: {str(e)}")
+        click.echo(f"Failed to get tables: {str(e)}")
         sys.exit(1)
 
 

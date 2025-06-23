@@ -339,7 +339,6 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             click.echo(f"  Model digest: {model_digest}")
         
         click.echo(f"  Waiting for run completion...")
-        click.echo(f"  Note: 1M cases may take 10-20 minutes...")
         completed = _wait_for_run_completion(service_url, actual_model_name, run_digest)
         
         if not completed:

@@ -34,16 +34,16 @@ def test_riskpaths():
     }
     
     try:
-        # Step 1: Clone repository
-        print("\nStep 1: Cloning repository...")
+        # Clone repository
+        print("\nCloning repository...")
         model_sln_path = clone_repo(
             git_url=config['git_url'],
             git_commit=config['git_commit'],
             model_sln=config['model_sln']
         )
         
-        # Step 2: Build model
-        print("\nStep 2: Building model...")
+        # Build model
+        print("\nBuilding model...")
         model_names = build_model(
             model_sln=model_sln_path,
             om_root=config['om_root'],
@@ -56,10 +56,10 @@ def test_riskpaths():
             raise RuntimeError("No models were built successfully")
         
         model_name = model_names[0]
-        print(f"SUCCESS: Built model: {model_name}")
+        print(f"Model built successfully: {model_name}")
         
-        # Step 3: Get output tables
-        print("\nStep 3: Getting output tables...")
+        # Get output tables
+        print("\nGetting output tables...")
         output_tables = get_output_tables(
             model_name=model_name,
             om_root=config['om_root'][0]
@@ -67,8 +67,8 @@ def test_riskpaths():
         
         print(f"Found {len(output_tables)} output tables")
         
-        # Step 4: Run models and compare
-        print("\nStep 4: Running models and comparing results...")
+        # Run models and compare
+        print("\nRunning models and comparing results...")
         results = run_models(
             om_root=config['om_root'],
             model_name=model_name,
@@ -79,8 +79,8 @@ def test_riskpaths():
             tables_per_run=10
         )
         
-        # Step 5: Generate report
-        print("\nStep 5: Generating HTML report...")
+        # Generate report
+        print("\nGenerating HTML report...")
         report_path = generate_html_report(
             summary=results,
             output_tables=output_tables,
@@ -91,7 +91,7 @@ def test_riskpaths():
             environment_note="Example Python testing script"
         )
         
-        print(f"\nCOMPLETE: Testing completed successfully!")
+        print(f"\nTesting completed successfully!")
         print(f"Report available at: {report_path}")
         
         # Show summary
@@ -105,7 +105,7 @@ def test_riskpaths():
         return results
         
     except Exception as e:
-        print(f"ERROR: Testing failed: {str(e)}")
+        print(f"Testing failed: {str(e)}")
         raise
 
 

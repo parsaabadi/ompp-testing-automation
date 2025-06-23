@@ -42,7 +42,7 @@ def generate_html_report(summary, output_tables, title="OpenM++ Testing Report",
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    click.echo(f"SUCCESS: Report saved to: {output_file}")
+    click.echo(f"Report saved to: {output_file}")
     
     return str(output_file)
 

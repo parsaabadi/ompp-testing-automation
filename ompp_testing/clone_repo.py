@@ -36,12 +36,12 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
     try:
         # Clone repo
         repo = Repo.clone_from(git_url, local_path)
-        click.echo("SUCCESS: Repo cloning successful.")
+        click.echo("Repository cloning successful.")
         
         # Checkout commit hash if set
         if git_commit:
             repo.git.checkout(git_commit, force=True)
-            click.echo(f"SUCCESS: Checked out commit {git_commit}")
+            click.echo(f"Checked out commit {git_commit}")
         
         # Find model solution file
         if model_sln:
@@ -49,7 +49,7 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
             
             if model_files:
                 model_path = str(model_files[0])
-                click.echo(f"SUCCESS: Found model solution: {model_path}")
+                click.echo(f"Found model solution: {model_path}")
                 return model_path
             else:
                 raise FileNotFoundError(f"Can't find {model_sln} anywhere in the repo")
@@ -57,5 +57,5 @@ def clone_repo(git_url, git_username=None, git_password=None, git_commit=None, m
         return str(local_path)
         
     except Exception as e:
-        click.echo(f"ERROR: Something went wrong: {str(e)}")
+        click.echo(f"Something went wrong: {str(e)}")
         raise 
