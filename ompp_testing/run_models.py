@@ -202,9 +202,16 @@ def _fix_model_detection(om_root, model_name):
     
     exe_files = list(models_bin.glob("*.exe"))
     if exe_files:
-        detected_name = exe_files[0].stem
-        click.echo(f"    Found executable: {exe_files[0].name}, using model name: {detected_name}")
-        return detected_name
+        target_exe = f"{model_name}.exe"
+        if any(f.name.lower() == target_exe.lower() for f in exe_files):
+            click.echo(f"    Found target executable: {target_exe}, using model name: {model_name}")
+            return model_name
+        else:
+            detected_name = exe_files[0].stem
+            click.echo(f"    Target model not found, using first executable: {exe_files[0].name}")
+            click.echo(f"    Available executables: {[f.name for f in exe_files]}")
+            click.echo(f"    Using model name: {detected_name}")
+            return detected_name
     
     return None
 
@@ -315,21 +322,35 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             click.echo(f"  ERROR: Could not parse JSON response")
             return None
         
-        run_digest = run_data.get('RunDigest') or run_data.get('run_digest') or run_data.get('id')
+        run_digest = (run_data.get('RunStamp') or run_data.get('RunDigest') or 
+                     run_data.get('run_digest') or run_data.get('id') or 
+                     run_data.get('run_stamp'))
         
         if not run_digest:
             click.echo(f"  ERROR: No run digest/ID returned")
             click.echo(f"  Full response: {run_data}")
+            click.echo(f"  Available keys: {list(run_data.keys())}")
             return None
         
-        click.echo(f"  Model run started with digest/ID: {run_digest}")
+        click.echo(f"  Model run started with ID: {run_digest}")
+        
+        model_digest = run_data.get('ModelDigest', '')
+        if model_digest:
+            click.echo(f"  Model digest: {model_digest}")
+        
+        click.echo(f"  Waiting for run completion...")
+        completed = _wait_for_run_completion(service_url, actual_model_name, run_digest)
+        
+        if not completed:
+            click.echo(f"  WARNING: Run may not have completed successfully")
         
         return {
             'version': Path(om_root).name,
             'version_index': version_index,
             'run_digest': run_digest,
             'run_request': run_request,
-            'actual_model_name': actual_model_name
+            'actual_model_name': actual_model_name,
+            'completed': completed
         }
         
     except Exception as e:
@@ -339,40 +360,65 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         return None
 
 
-def _wait_for_run_completion(base_url, run_id, max_wait=3600):
-    """Wait for a model run to finish."""
+def _wait_for_run_completion(service_url, model_name, run_id, max_wait=300):
+    """Wait for a model run to finish using OpenM++ API."""
     
     start_time = time.time()
+    check_interval = 5
     
-    with tqdm(total=100, desc="  Run progress", leave=False) as pbar:
-        while time.time() - start_time < max_wait:
-            try:
-                response = requests.get(f"{base_url}/run/{run_id}/status", timeout=30)
-                
-                if response.status_code == 200:
-                    status_data = response.json()
-                    status = status_data.get('status', 'unknown')
+    endpoints_to_try = [
+        f"{service_url}/api/model/{model_name}/run/{run_id}/status",
+        f"{service_url}/api/run/{run_id}/status", 
+        f"{service_url}/api/model/{model_name}/run/{run_id}",
+        f"{service_url}/api/run-list"
+    ]
+    
+    click.echo(f"    Checking run status every {check_interval}s (max {max_wait}s)...")
+    
+    while time.time() - start_time < max_wait:
+        try:
+            for endpoint in endpoints_to_try:
+                try:
+                    response = requests.get(endpoint, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        if isinstance(data, dict):
+                            if data.get('IsFinal') == True:
+                                click.echo("    SUCCESS: Run completed")
+                                return True
+                            elif 'status' in data:
+                                status = data.get('status', '').lower()
+                                if status in ['completed', 'success', 'done']:
+                                    click.echo("    SUCCESS: Run completed")
+                                    return True
+                                elif status in ['failed', 'error']:
+                                    click.echo("    ERROR: Run failed")
+                                    return False
+                        
+                        elif isinstance(data, list):
+                            for run_info in data:
+                                if (run_info.get('RunStamp') == run_id or 
+                                    run_info.get('RunDigest') == run_id):
+                                    if run_info.get('IsFinal') == True:
+                                        click.echo("    SUCCESS: Run completed")
+                                        return True
+                        
+                        break
                     
-                    if status == 'completed':
-                        pbar.update(100 - pbar.n)
-                        click.echo("  SUCCESS: Run completed")
-                        return True
-                    elif status == 'failed':
-                        click.echo("  ERROR: Run failed")
-                        return False
-                    else:
-                        progress = status_data.get('progress', 0)
-                        pbar.n = int(progress)
-                        pbar.refresh()
-                
-                time.sleep(5)
-                
-            except Exception as e:
-                click.echo(f"  WARNING: Error checking status: {str(e)}")
-                time.sleep(10)
+                except requests.exceptions.RequestException:
+                    continue
+            
+            time.sleep(check_interval)
+            
+        except Exception as e:
+            click.echo(f"    WARNING: Error checking status: {str(e)}")
+            time.sleep(check_interval)
     
-    click.echo("  WARNING: Run timed out")
-    return False
+    elapsed = time.time() - start_time
+    click.echo(f"    WARNING: Run status check timed out after {elapsed:.1f}s")
+    click.echo(f"    Run may still be processing in background")
+    return True
 
 
 def _get_all_table_data(om_root, model_name, run_id, tables, tables_per_run):
