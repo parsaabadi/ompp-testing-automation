@@ -115,6 +115,18 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
             run_query = "SELECT MAX(run_id) as latest_run FROM run_lst"
             latest_run = pd.read_sql_query(run_query, conn)
             run_id = latest_run.iloc[0]['latest_run']
+        else:
+            # API RunStamp is timestamp format, but database uses integer run_ids
+            # Always use the latest run_id since we just initiated a new run
+            try:
+                run_query = "SELECT MAX(run_id) as latest_run FROM run_lst"
+                latest_run = pd.read_sql_query(run_query, conn)
+                if not latest_run.empty and latest_run.iloc[0]['latest_run'] is not None:
+                    actual_run_id = latest_run.iloc[0]['latest_run']
+                    click.echo(f"    Using latest database run_id {actual_run_id} instead of API RunStamp {run_id}")
+                    run_id = actual_run_id
+            except Exception as e:
+                click.echo(f"    Could not get latest run_id, using provided: {e}")
         
         # Debug: Check what's actually in the database
         try:
@@ -126,12 +138,33 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
                 click.echo(f"    Debug: Looking for run_id: {run_id}")
             
             # Check if table exists and has data
-            table_check = pd.read_sql_query(f"SELECT COUNT(*) as count FROM {table_name}", conn)
-            total_rows = table_check.iloc[0]['count']
-            click.echo(f"    Debug: Table {table_name} has {total_rows} total rows")
+            try:
+                table_check = pd.read_sql_query(f"SELECT COUNT(*) as count FROM {table_name}", conn)
+                total_rows = table_check.iloc[0]['count']
+                click.echo(f"    Debug: Table {table_name} has {total_rows} total rows")
+            except Exception as table_e:
+                # Table doesn't exist - check what tables are available
+                try:
+                    tables_query = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                    available_tables = pd.read_sql_query(tables_query, conn)
+                    table_list = available_tables['name'].tolist() if not available_tables.empty else []
+                    click.echo(f"    Debug: Table {table_name} doesn't exist. Available tables: {table_list}")
+                except:
+                    click.echo(f"    Debug: Could not check available tables: {table_e}")
             
         except Exception as debug_e:
             click.echo(f"    Debug: Could not check database contents: {debug_e}")
+        
+        # Check if table exists first
+        try:
+            table_exists_query = f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
+            table_exists = pd.read_sql_query(table_exists_query, conn)
+            if table_exists.empty:
+                conn.close()
+                raise Exception(f"Table {table_name} does not exist in database")
+        except Exception as table_check_e:
+            conn.close()
+            raise Exception(f"Could not verify table existence: {table_check_e}")
         
         # Try different run identification approaches based on OpenM++ version
         queries_to_try = [
