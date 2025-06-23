@@ -339,10 +339,18 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             click.echo(f"  Model digest: {model_digest}")
         
         click.echo(f"  Waiting for run completion...")
+        click.echo(f"  Note: 1M cases may take 10-20 minutes...")
         completed = _wait_for_run_completion(service_url, actual_model_name, run_digest)
         
         if not completed:
-            click.echo(f"  WARNING: Run may not have completed successfully")
+            click.echo(f"  WARNING: Run status check timed out, but run may have completed")
+            click.echo(f"  Will attempt to retrieve results anyway...")
+        
+        click.echo(f"  Retrieving table data...")
+        table_data = _get_all_table_data(om_root, actual_model_name, run_digest, tables, tables_per_run)
+        
+        tables_retrieved = len([v for v in table_data.values() if v is not None])
+        click.echo(f"  Successfully retrieved {tables_retrieved}/{len(tables)} tables")
         
         return {
             'version': Path(om_root).name,
@@ -350,7 +358,8 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             'run_digest': run_digest,
             'run_request': run_request,
             'actual_model_name': actual_model_name,
-            'completed': completed
+            'completed': completed,
+            'table_data': table_data
         }
         
     except Exception as e:
@@ -360,7 +369,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         return None
 
 
-def _wait_for_run_completion(service_url, model_name, run_id, max_wait=300):
+def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
     """Wait for a model run to finish using OpenM++ API."""
     
     start_time = time.time()
