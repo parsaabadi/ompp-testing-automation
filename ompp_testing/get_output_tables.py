@@ -18,10 +18,21 @@ def get_output_tables(model_name, om_root):
     """
     click.echo(f"Getting output tables for {model_name}")
     
-    db_path = Path(om_root) / 'models' / f'{model_name}.db'
+    db_paths = [
+        Path(om_root) / 'models' / f'{model_name}.sqlite',
+        Path(om_root) / 'models' / f'{model_name}.db',
+        Path(om_root) / 'models' / 'bin' / f'{model_name}.sqlite',
+        Path(om_root) / 'models' / 'bin' / f'{model_name}.db'
+    ]
     
-    if not db_path.exists():
-        raise FileNotFoundError(f"Can't find the model database: {db_path}")
+    db_path = None
+    for path in db_paths:
+        if path.exists():
+            db_path = path
+            break
+    
+    if not db_path:
+        raise FileNotFoundError(f"Can't find the model database. Tried: {[str(p) for p in db_paths]}")
     
     try:
         conn = sqlite3.connect(str(db_path))
@@ -81,10 +92,21 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
     If you don't specify a run_id, it'll get the latest run.
     Returns the table data as a pandas DataFrame.
     """
-    db_path = Path(om_root) / 'models' / f'{model_name}.db'
+    db_paths = [
+        Path(om_root) / 'models' / f'{model_name}.sqlite',
+        Path(om_root) / 'models' / f'{model_name}.db',
+        Path(om_root) / 'models' / 'bin' / f'{model_name}.sqlite',
+        Path(om_root) / 'models' / 'bin' / f'{model_name}.db'
+    ]
     
-    if not db_path.exists():
-        raise FileNotFoundError(f"Can't find the model database: {db_path}")
+    db_path = None
+    for path in db_paths:
+        if path.exists():
+            db_path = path
+            break
+    
+    if not db_path:
+        raise FileNotFoundError(f"Can't find the model database. Tried: {[str(p) for p in db_paths]}")
     
     try:
         conn = sqlite3.connect(str(db_path))
@@ -94,13 +116,32 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
             latest_run = pd.read_sql_query(run_query, conn)
             run_id = latest_run.iloc[0]['latest_run']
         
-        query = f"""
-        SELECT * FROM {table_name}
-        WHERE run_id = {run_id}
-        """
+        # Try different run identification approaches based on OpenM++ version
+        queries_to_try = [
+            f"SELECT * FROM {table_name} WHERE run_id = ?",
+            f"SELECT * FROM {table_name} WHERE run_digest = ?",
+            f"SELECT * FROM {table_name} WHERE run_name = ?",
+            f"SELECT * FROM {table_name} ORDER BY ROWID DESC LIMIT 1000"
+        ]
         
-        data = pd.read_sql_query(query, conn)
+        data = None
+        for query in queries_to_try:
+            try:
+                if "LIMIT" in query:
+                    data = pd.read_sql_query(query, conn)
+                else:
+                    data = pd.read_sql_query(query, conn, params=[str(run_id)])
+                
+                if data is not None and len(data) > 0:
+                    break
+                    
+            except Exception as query_e:
+                continue
+        
         conn.close()
+        
+        if data is None or len(data) == 0:
+            raise Exception(f"No data found for table {table_name} with run_id {run_id}")
         
         return data
         
@@ -115,10 +156,21 @@ def get_model_runs(model_name, om_root):
     
     Shows you what runs are available and when they were created.
     """
-    db_path = Path(om_root) / 'models' / f'{model_name}.db'
+    db_paths = [
+        Path(om_root) / 'models' / f'{model_name}.sqlite',
+        Path(om_root) / 'models' / f'{model_name}.db',
+        Path(om_root) / 'models' / 'bin' / f'{model_name}.sqlite',
+        Path(om_root) / 'models' / 'bin' / f'{model_name}.db'
+    ]
     
-    if not db_path.exists():
-        raise FileNotFoundError(f"Can't find the model database: {db_path}")
+    db_path = None
+    for path in db_paths:
+        if path.exists():
+            db_path = path
+            break
+    
+    if not db_path:
+        raise FileNotFoundError(f"Can't find the model database. Tried: {[str(p) for p in db_paths]}")
     
     try:
         conn = sqlite3.connect(str(db_path))
