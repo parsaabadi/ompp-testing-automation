@@ -116,23 +116,48 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
             latest_run = pd.read_sql_query(run_query, conn)
             run_id = latest_run.iloc[0]['latest_run']
         
+        # Debug: Check what's actually in the database
+        try:
+            # Check available runs
+            run_check = pd.read_sql_query("SELECT * FROM run_lst ORDER BY run_id DESC LIMIT 5", conn)
+            click.echo(f"    Debug: Found {len(run_check)} recent runs in database")
+            if len(run_check) > 0:
+                click.echo(f"    Debug: Latest run_ids: {run_check['run_id'].tolist()}")
+                click.echo(f"    Debug: Looking for run_id: {run_id}")
+            
+            # Check if table exists and has data
+            table_check = pd.read_sql_query(f"SELECT COUNT(*) as count FROM {table_name}", conn)
+            total_rows = table_check.iloc[0]['count']
+            click.echo(f"    Debug: Table {table_name} has {total_rows} total rows")
+            
+        except Exception as debug_e:
+            click.echo(f"    Debug: Could not check database contents: {debug_e}")
+        
         # Try different run identification approaches based on OpenM++ version
         queries_to_try = [
             f"SELECT * FROM {table_name} WHERE run_id = ?",
-            f"SELECT * FROM {table_name} WHERE run_digest = ?",
+            f"SELECT * FROM {table_name} WHERE run_digest = ?", 
             f"SELECT * FROM {table_name} WHERE run_name = ?",
             f"SELECT * FROM {table_name} ORDER BY ROWID DESC LIMIT 1000"
         ]
         
         data = None
-        for query in queries_to_try:
+        successful_query = None
+        
+        for i, query in enumerate(queries_to_try):
             try:
                 if "LIMIT" in query:
                     data = pd.read_sql_query(query, conn)
+                    if len(data) > 0:
+                        successful_query = f"fallback query (latest {len(data)} rows)"
                 else:
                     data = pd.read_sql_query(query, conn, params=[str(run_id)])
+                    if len(data) > 0:
+                        query_types = ["run_id", "run_digest", "run_name"]
+                        successful_query = f"{query_types[i]} match"
                 
                 if data is not None and len(data) > 0:
+                    click.echo(f"    Debug: Successfully retrieved {len(data)} rows using {successful_query}")
                     break
                     
             except Exception as query_e:
