@@ -32,7 +32,7 @@ class OpenMppAPI:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            click.echo(f"WARNING: Could not get model runs: {e}")
+            click.echo(f"Could not get model runs: {e}")
             return []
     
     def run_model(self, model_name, run_name, options):
@@ -53,7 +53,7 @@ class OpenMppAPI:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            click.echo(f"ERROR: Model run failed: {e}")
+            click.echo(f"Model run failed: {e}")
             raise
     
     def get_run_tables(self, model_name, run_digest):
@@ -65,7 +65,7 @@ class OpenMppAPI:
             response.raise_for_status()
             return response.json()
         except Exception as e:
-            click.echo(f"WARNING: Could not get run tables: {e}")
+            click.echo(f"Could not get run tables: {e}")
             return {}
 
 
@@ -100,7 +100,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
             
             service_url = start_oms(root, model_name)
             if not service_url:
-                click.echo(f"  ERROR: Failed to start service for {root}")
+                click.echo(f"  Failed to start service for {root}")
                 continue
             
             time.sleep(3)
@@ -120,7 +120,7 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
         return comparison
         
     except Exception as e:
-        click.echo(f"ERROR: Model run failed: {str(e)}")
+        click.echo(f"Model run failed: {str(e)}")
         raise
     
     finally:
@@ -247,17 +247,17 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
                 else:
                     model_found = any(name.lower() == model_name.lower() for name in model_names)
                     if not model_found:
-                        click.echo(f"  ERROR: Model '{model_name}' not found in service")
+                        click.echo(f"  Model '{model_name}' not found in service")
                         click.echo(f"  Available models: {model_names}")
                         return None
                     
                     actual_model_name = next((name for name in model_names if name.lower() == model_name.lower()), model_name)
                     click.echo(f"  Using model name: '{actual_model_name}'")
             else:
-                click.echo(f"  WARNING: Service returned empty model list")
+                click.echo(f"  Service returned empty model list")
                 actual_model_name = model_name
         else:
-            click.echo(f"  WARNING: Could not get model list (status: {response.status_code})")
+            click.echo(f"  Could not get model list (status: {response.status_code})")
             click.echo(f"  Response: {response.text}")
             actual_model_name = model_name
         
@@ -292,7 +292,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         click.echo(f"  Response text: {response.text}")
         
         if response.status_code != 200:
-            click.echo(f"  ERROR: Failed to start model run")
+            click.echo(f"  Failed to start model run")
             click.echo(f"  Status: {response.status_code}")
             click.echo(f"  Response: {response.text}")
             
@@ -319,7 +319,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         try:
             run_data = response.json()
         except:
-            click.echo(f"  ERROR: Could not parse JSON response")
+            click.echo(f"  Could not parse JSON response")
             return None
         
         run_digest = (run_data.get('RunStamp') or run_data.get('RunDigest') or 
@@ -327,7 +327,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
                      run_data.get('run_stamp'))
         
         if not run_digest:
-            click.echo(f"  ERROR: No run digest/ID returned")
+            click.echo(f"  No run digest/ID returned")
             click.echo(f"  Full response: {run_data}")
             click.echo(f"  Available keys: {list(run_data.keys())}")
             return None
@@ -342,7 +342,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         completed = _wait_for_run_completion(service_url, actual_model_name, run_digest)
         
         if not completed:
-            click.echo(f"  WARNING: Run status check timed out, but run may have completed")
+            click.echo(f"  Run status check timed out, but run may have completed")
             click.echo(f"  Will attempt to retrieve results anyway...")
         
         click.echo(f"  Retrieving table data...")
@@ -362,10 +362,8 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         }
         
     except Exception as e:
-        click.echo(f"  ERROR: Error running model: {str(e)}")
-        import traceback
-        click.echo(f"  Traceback: {traceback.format_exc()}")
-        return None
+        click.echo(f"Model run failed: {str(e)}")
+        raise
 
 
 def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
@@ -393,15 +391,15 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
                         
                         if isinstance(data, dict):
                             if data.get('IsFinal') == True:
-                                click.echo("    SUCCESS: Run completed")
+                                click.echo("    Run completed")
                                 return True
                             elif 'status' in data:
                                 status = data.get('status', '').lower()
                                 if status in ['completed', 'success', 'done']:
-                                    click.echo("    SUCCESS: Run completed")
+                                    click.echo("    Run completed")
                                     return True
                                 elif status in ['failed', 'error']:
-                                    click.echo("    ERROR: Run failed")
+                                    click.echo("    Run failed")
                                     return False
                         
                         elif isinstance(data, list):
@@ -409,7 +407,7 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
                                 if (run_info.get('RunStamp') == run_id or 
                                     run_info.get('RunDigest') == run_id):
                                     if run_info.get('IsFinal') == True:
-                                        click.echo("    SUCCESS: Run completed")
+                                        click.echo("    Run completed")
                                         return True
                         
                         break
@@ -420,11 +418,11 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait=1200):
             time.sleep(check_interval)
             
         except Exception as e:
-            click.echo(f"    WARNING: Error checking status: {str(e)}")
+            click.echo(f"    Error checking status: {str(e)}")
             time.sleep(check_interval)
     
     elapsed = time.time() - start_time
-    click.echo(f"    WARNING: Run status check timed out after {elapsed:.1f}s")
+    click.echo(f"    Run status check timed out after {elapsed:.1f}s")
     click.echo(f"    Run may still be processing in background")
     return True
 
@@ -444,7 +442,7 @@ def _get_all_table_data(om_root, model_name, run_id, tables, tables_per_run):
                 data = get_table_data(model_name, om_root, table_name, run_id)
                 table_data[table_name] = data
             except Exception as e:
-                click.echo(f"    WARNING: Failed to get {table_name}: {str(e)}")
+                click.echo(f"    Failed to get {table_name}: {str(e)}")
                 table_data[table_name] = None
     
     return table_data 

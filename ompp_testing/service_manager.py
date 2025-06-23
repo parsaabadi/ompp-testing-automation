@@ -92,14 +92,14 @@ def start_oms(om_root, model_name=None):
         service_url = _detect_service_url()
         
         if service_url:
-            click.echo(f"  SUCCESS: OpenM++ service is running at {service_url}")
+            click.echo(f"  OpenM++ service is running at {service_url}")
             return service_url
         else:
-            click.echo("  WARNING: Service started but could not detect port, using default")
+            click.echo("  Service started but could not detect port, using default")
             return "http://localhost:4040"
             
     except Exception as e:
-        click.echo(f"  ERROR: Failed to start service: {str(e)}")
+        click.echo(f"  Failed to start service: {str(e)}")
         # Clean up custom script if it was created
         if custom_script.exists():
             try:
@@ -136,13 +136,13 @@ def _start_oms_direct(om_root):
         
         service_url = _detect_service_url()
         if service_url:
-            click.echo(f"  SUCCESS: OpenM++ service is running at {service_url}")
+            click.echo(f"  OpenM++ service is running at {service_url}")
             return service_url
         else:
             return "http://localhost:4040"  # fallback
             
     except Exception as e:
-        click.echo(f"  ERROR: Failed to start service: {str(e)}")
+        click.echo(f"  Failed to start service: {str(e)}")
         return None
 
 
@@ -193,9 +193,9 @@ def stop_oms():
         pass
     
     if killed_count > 0:
-        click.echo(f"  SUCCESS: Stopped {killed_count} OpenM++ service(s)")
+        click.echo(f"  Stopped {killed_count} OpenM++ service(s)")
     else:
-        click.echo("  INFO: No OpenM++ services were running")
+        click.echo("  No OpenM++ services were running")
 
 
 def _check_oms_running(base_url="http://localhost:4040"):
