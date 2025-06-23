@@ -137,41 +137,48 @@ def get_table_data(model_name, om_root, table_name, run_id=None):
                 click.echo(f"    Debug: Latest run_ids: {run_check['run_id'].tolist()}")
                 click.echo(f"    Debug: Looking for run_id: {run_id}")
             
-            # Check if table exists and has data
-            try:
-                table_check = pd.read_sql_query(f"SELECT COUNT(*) as count FROM {table_name}", conn)
-                total_rows = table_check.iloc[0]['count']
-                click.echo(f"    Debug: Table {table_name} has {total_rows} total rows")
-            except Exception as table_e:
-                # Table doesn't exist - check what tables are available
-                try:
-                    tables_query = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-                    available_tables = pd.read_sql_query(tables_query, conn)
-                    table_list = available_tables['name'].tolist() if not available_tables.empty else []
-                    click.echo(f"    Debug: Table {table_name} doesn't exist. Available tables: {table_list}")
-                except:
-                    click.echo(f"    Debug: Could not check available tables: {table_e}")
+            # Check if table exists and has data (will be done after actual_table_name is determined)
+            pass
             
         except Exception as debug_e:
             click.echo(f"    Debug: Could not check database contents: {debug_e}")
         
-        # Check if table exists first
+        # Check if table exists, and if not, look for table with digest suffix
+        actual_table_name = table_name
         try:
             table_exists_query = f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'"
             table_exists = pd.read_sql_query(table_exists_query, conn)
+            
             if table_exists.empty:
-                conn.close()
-                raise Exception(f"Table {table_name} does not exist in database")
+                # Look for table with digest suffix (common in OpenM++ databases)
+                suffix_query = f"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '{table_name}_%'"
+                suffix_tables = pd.read_sql_query(suffix_query, conn)
+                
+                if not suffix_tables.empty:
+                    actual_table_name = suffix_tables.iloc[0]['name']
+                    click.echo(f"    Using table with digest: {actual_table_name} for {table_name}")
+                else:
+                    conn.close()
+                    raise Exception(f"Table {table_name} does not exist in database (with or without digest suffix)")
+            
         except Exception as table_check_e:
             conn.close()
             raise Exception(f"Could not verify table existence: {table_check_e}")
         
+        # Check table row count for debugging
+        try:
+            table_check = pd.read_sql_query(f"SELECT COUNT(*) as count FROM {actual_table_name}", conn)
+            total_rows = table_check.iloc[0]['count']
+            click.echo(f"    Debug: Table {actual_table_name} has {total_rows} total rows")
+        except Exception as count_e:
+            click.echo(f"    Debug: Could not count rows in {actual_table_name}: {count_e}")
+        
         # Try different run identification approaches based on OpenM++ version
         queries_to_try = [
-            f"SELECT * FROM {table_name} WHERE run_id = ?",
-            f"SELECT * FROM {table_name} WHERE run_digest = ?", 
-            f"SELECT * FROM {table_name} WHERE run_name = ?",
-            f"SELECT * FROM {table_name} ORDER BY ROWID DESC LIMIT 1000"
+            f"SELECT * FROM {actual_table_name} WHERE run_id = ?",
+            f"SELECT * FROM {actual_table_name} WHERE run_digest = ?", 
+            f"SELECT * FROM {actual_table_name} WHERE run_name = ?",
+            f"SELECT * FROM {actual_table_name} ORDER BY ROWID DESC LIMIT 1000"
         ]
         
         data = None
