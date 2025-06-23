@@ -6,6 +6,7 @@ import os
 import shutil
 import time
 import pickle
+import json
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -128,52 +129,112 @@ def run_models(om_root, model_name, cases=1000000, threads=8, sub_samples=8,
 
 def _run_single_version(om_root, model_name, cases, threads, sub_samples, 
                        tables, tables_per_run, version_index, service_url):
-    """Run the model on one specific OpenM++ version."""
-    
     click.echo(f"  Starting model run...")
     
-    base_url = f"{service_url}/api"
-    
     try:
-        run_params = {
-            "model": model_name,
-            "run_name": f"TestRun_{int(time.time())}",
-            "cases": cases,
-            "threads": threads,
-            "sub_samples": sub_samples
+        click.echo(f"  Checking available models...")
+        response = requests.get(f"{service_url}/api/model-list", timeout=10)
+        
+        if response.status_code == 200:
+            models = response.json()
+            if models:
+                model_names = [m.get('Name', 'Unknown') for m in models]
+                click.echo(f"  Service sees {len(model_names)} models: {model_names}")
+                
+                model_found = any(name.lower() == model_name.lower() for name in model_names)
+                if not model_found:
+                    click.echo(f"  ERROR: Model '{model_name}' not found in service")
+                    click.echo(f"  Available models: {model_names}")
+                    return None
+                
+                actual_model_name = next((name for name in model_names if name.lower() == model_name.lower()), model_name)
+                click.echo(f"  Using model name: '{actual_model_name}'")
+            else:
+                click.echo(f"  WARNING: Service returned empty model list")
+                actual_model_name = model_name
+        else:
+            click.echo(f"  WARNING: Could not get model list (status: {response.status_code})")
+            click.echo(f"  Response: {response.text}")
+            actual_model_name = model_name
+        
+        click.echo(f"  Starting model run...")
+        
+        run_request = {
+            "ModelName": actual_model_name,
+            "RunName": f"TestRun_{int(time.time())}",
+            "Opts": {
+                "Parameter.SimulationCases": str(cases),
+                "OpenM.Threads": str(threads),
+                "OpenM.SubValues": str(sub_samples)
+            },
+            "Tables": tables[:10] if tables else []
         }
         
-        response = requests.post(f"{base_url}/run", json=run_params, timeout=300)
+        click.echo(f"  Sending run request to: {service_url}/api/run")
+        click.echo(f"  Request payload: {json.dumps(run_request, indent=2)}")
+        
+        response = requests.post(
+            f"{service_url}/api/run", 
+            json=run_request, 
+            timeout=30
+        )
+        
+        click.echo(f"  Response status: {response.status_code}")
+        click.echo(f"  Response headers: {dict(response.headers)}")
+        click.echo(f"  Response text: {response.text}")
         
         if response.status_code != 200:
-            click.echo(f"  ERROR: Failed to start model run: {response.text}")
+            click.echo(f"  ERROR: Failed to start model run")
+            click.echo(f"  Status: {response.status_code}")
+            click.echo(f"  Response: {response.text}")
+            
+            alternative_endpoints = [
+                f"{service_url}/api/model/{actual_model_name}/run",
+                f"{service_url}/api/models/{actual_model_name}/run",
+                f"{service_url}/api/run-model"
+            ]
+            
+            for alt_endpoint in alternative_endpoints:
+                click.echo(f"  Trying alternative endpoint: {alt_endpoint}")
+                try:
+                    alt_response = requests.post(alt_endpoint, json=run_request, timeout=10)
+                    click.echo(f"    Status: {alt_response.status_code}, Response: {alt_response.text[:200]}")
+                    if alt_response.status_code == 200:
+                        response = alt_response
+                        break
+                except Exception as e:
+                    click.echo(f"    Failed: {str(e)}")
+            
+            if response.status_code != 200:
+                return None
+        
+        try:
+            run_data = response.json()
+        except:
+            click.echo(f"  ERROR: Could not parse JSON response")
             return None
         
-        run_data = response.json()
-        run_id = run_data.get('run_id')
+        run_digest = run_data.get('RunDigest') or run_data.get('run_digest') or run_data.get('id')
         
-        if not run_id:
-            click.echo(f"  ERROR: No run ID returned")
+        if not run_digest:
+            click.echo(f"  ERROR: No run digest/ID returned")
+            click.echo(f"  Full response: {run_data}")
             return None
         
-        click.echo(f"  Model run started with ID: {run_id}")
-        
-        click.echo(f"  Waiting for run to complete...")
-        _wait_for_run_completion(base_url, run_id)
-        
-        click.echo(f"  Getting table data...")
-        table_data = _get_all_table_data(om_root, model_name, run_id, tables, tables_per_run)
+        click.echo(f"  Model run started with digest/ID: {run_digest}")
         
         return {
             'version': Path(om_root).name,
             'version_index': version_index,
-            'run_id': run_id,
-            'run_params': run_params,
-            'table_data': table_data
+            'run_digest': run_digest,
+            'run_request': run_request,
+            'actual_model_name': actual_model_name
         }
         
     except Exception as e:
         click.echo(f"  ERROR: Error running model: {str(e)}")
+        import traceback
+        click.echo(f"  Traceback: {traceback.format_exc()}")
         return None
 
 
