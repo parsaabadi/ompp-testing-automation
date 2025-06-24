@@ -363,7 +363,22 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             click.echo(f"  Will attempt to retrieve results anyway...")
         
         click.echo(f"  Retrieving table data...")
-        table_data = _get_all_table_data(om_root, actual_model_name, run_digest, tables, tables_per_run)
+        
+        # Try to get the actual database run_id by checking status
+        actual_run_id = run_digest  # fallback to original
+        try:
+            response = requests.get(f"{service_url}/api/model/{actual_model_name}/run/{run_digest}/status", timeout=10)
+            if response.status_code == 200:
+                status_data = response.json()
+                if status_data.get('RunId'):
+                    actual_run_id = status_data['RunId']
+                    click.echo(f"  Using database run_id: {actual_run_id}")
+                else:
+                    click.echo(f"  Using original run_id: {actual_run_id}")
+        except Exception as e:
+            click.echo(f"  Could not get run_id, using original: {actual_run_id}")
+        
+        table_data = _get_all_table_data(om_root, actual_model_name, actual_run_id, tables, tables_per_run)
         
         tables_retrieved = len([v for v in table_data.values() if v is not None])
         click.echo(f"  Successfully retrieved {tables_retrieved}/{len(tables)} tables")
@@ -372,6 +387,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             'version': Path(om_root).name,
             'version_index': version_index,
             'run_digest': run_digest,
+            'actual_run_id': actual_run_id,
             'run_request': run_request,
             'actual_model_name': actual_model_name,
             'completed': completed,
@@ -415,15 +431,19 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait, cases):
                             click.echo(f"    Status response: {data}")
                         
                         if isinstance(data, dict):
+                            # Check for completed run using OpenM++ specific fields
                             if data.get('IsFinal') == True:
                                 click.echo("    Run completed")
                                 return True
+                            elif data.get('Status') == 's' and data.get('SubCompleted') == data.get('SubCount'):
+                                click.echo("    Run completed (all sub-samples finished)")
+                                return True
                             elif 'status' in data:
                                 status = data.get('status', '').lower()
-                                if status in ['completed', 'success', 'done']:
+                                if status in ['completed', 'success', 'done', 's']:
                                     click.echo("    Run completed")
                                     return True
-                                elif status in ['failed', 'error']:
+                                elif status in ['failed', 'error', 'f']:
                                     click.echo("    Run failed")
                                     return False
                         
