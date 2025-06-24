@@ -348,7 +348,15 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
             click.echo(f"  Model digest: {model_digest}")
         
         click.echo(f"  Waiting for run completion...")
-        completed = _wait_for_run_completion(service_url, actual_model_name, run_digest, max_run_time)
+        
+        # For small test runs, use shorter timeout
+        if cases < 10000:
+            actual_timeout = min(max_run_time, 300)  # Max 5 minutes for small tests
+            click.echo(f"  Small test detected - using {actual_timeout//60} minute timeout")
+        else:
+            actual_timeout = max_run_time
+            
+        completed = _wait_for_run_completion(service_url, actual_model_name, run_digest, actual_timeout, cases)
         
         if not completed:
             click.echo(f"  Run status check timed out, but run may have completed")
@@ -375,7 +383,7 @@ def _run_single_version(om_root, model_name, cases, threads, sub_samples,
         raise
 
 
-def _wait_for_run_completion(service_url, model_name, run_id, max_wait):
+def _wait_for_run_completion(service_url, model_name, run_id, max_wait, cases):
     """Wait for a model run to finish using OpenM++ API.
     
     Args:
@@ -401,6 +409,10 @@ def _wait_for_run_completion(service_url, model_name, run_id, max_wait):
                     response = requests.get(endpoint, timeout=10)
                     if response.status_code == 200:
                         data = response.json()
+                        
+                        # Debug: Print status response for small runs
+                        if cases < 10000:
+                            click.echo(f"    Status response: {data}")
                         
                         if isinstance(data, dict):
                             if data.get('IsFinal') == True:
